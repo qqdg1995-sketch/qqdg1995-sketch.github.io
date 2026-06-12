@@ -1,11 +1,10 @@
 // Service Worker for Personal Finance PWA
-const BASE = '/faker-de-jizhang';
-const CACHE_NAME = 'pf-cache-v3';
+const CACHE_NAME = 'pf-cache-v4';
 const ASSETS_TO_CACHE = [
-  BASE + '/',
-  BASE + '/index.html',
-  BASE + '/manifest.json',
-  BASE + '/favicon.svg',
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.svg',
 ];
 
 // Install: cache app shell (no skipWaiting to avoid unexpected reloads)

@@ -9,9 +9,7 @@ import './index.css';
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/faker-de-jizhang/sw.js', {
-      scope: '/faker-de-jizhang/',
-    }).then(
+    navigator.serviceWorker.register('/sw.js').then(
       (reg) => console.log('SW registered:', reg.scope),
       (err) => console.log('SW registration failed:', err)
     );
