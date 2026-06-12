@@ -1,0 +1,173 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal swipe from scrolling the whole page */
+html {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: contain;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f1f5f9;
+  color: #1e293b;
+  overflow-x: hidden;
+  overscroll-behavior-x: contain;
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+  .ant-table {
+    font-size: 13px;
+  }
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 8px 6px !important;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Sticky header fix */
+.ant-layout-header {
+  line-height: normal !important;
+}
+
+/* Card styles for modern flat look */
+.ant-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Statistic card enhanced */
+.ant-statistic-title {
+  font-size: 13px !important;
+  color: #64748b !important;
+}
+
+/* Modal polish */
+.ant-modal-header {
+  border-radius: 16px 16px 0 0 !important;
+}
+
+/* Button hover smooth */
+.ant-btn {
+  transition: all 0.2s ease;
+}
+
+/* Tabs responsive */
+@media (max-width: 768px) {
+  .ant-tabs-nav {
+    margin-bottom: 8px !important;
+  }
+  .ant-tabs-tab {
+    font-size: 12px !important;
+    padding: 8px 10px !important;
+  }
+}
+
+/* Card responsive */
+@media (max-width: 576px) {
+  .ant-card {
+    margin-bottom: 12px;
+  }
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  .ant-statistic-content {
+    font-size: 20px !important;
+  }
+}
+
+/* ── Mobile scroll & touch optimization ── */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
+  /* Prevent horizontal swipe in tab bar from scrolling the whole page */
+  .tab-bar-container {
+    touch-action: pan-y pinch-zoom;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-bar-container .ant-tabs-nav-wrap {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  /* Reduce card hover effect to avoid repaints on touch */
+  .ant-card:active {
+    transform: scale(0.995);
+    transition: transform 0.1s ease;
+  }
+
+  /* Prevent sticky tabs from stealing scroll momentum */
+  .ant-tabs-nav-wrap {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Compact header on mobile */
+  .ant-layout-header {
+    padding: 0 12px !important;
+  }
+
+  /* Tighter content padding */
+  .ant-layout-content {
+    padding: 12px !important;
+  }
+
+  /* ECharts chart: prevent double-tap zoom and improve touch */
+  canvas {
+    touch-action: manipulation;
+  }
+}
+
+/* ── SummaryPage mobile: 2-3 cols for comparison cards ── */
+@media (max-width: 576px) {
+  .summary-compare-cards .ant-card-body {
+    padding: 10px !important;
+  }
+  .summary-compare-cards .ant-card {
+    margin-bottom: 8px;
+  }
+}
+
+/* ── Summary page chart grid fix for mobile ── */
+@media (max-width: 576px) {
+  .summary-chart-card .ant-card-body {
+    padding: 10px !important;
+  }
+}
+
+/* Select-style year picker */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236366f1' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: 20px !important;
+}

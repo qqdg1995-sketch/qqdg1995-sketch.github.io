@@ -1,0 +1,17 @@
+{
+  "name": "个人财富管理",
+  "short_name": "财富管理",
+  "description": "个人全年财富管理记账软件",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#1a73e8",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
