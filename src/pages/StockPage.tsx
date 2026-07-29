@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Tag, Empty, Alert, Spin } from 'antd';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useState } from 'react';
+import { Card, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Tag, Empty, Alert, Spin } from 'antd';
 import { PlusOutlined, DeleteOutlined, MinusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +8,7 @@ import { useStockStore } from '../store/useStockStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { StockPortfolio, StockRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
 
 export default function StockPage() {
   const { user } = useAuthStore();
@@ -31,15 +33,19 @@ export default function StockPage() {
       Promise.all([loadPortfolios(userId, currentYear), loadRecords(userId, currentYear)])
         .finally(() => setLoading(false));
     }
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadPortfolios, loadRecords]);
 
   useEffect(() => {
-    if (portfolios.length > 0 && !activePF) setActivePF(portfolios[0].id);
-  }, [portfolios]);
+    if (portfolios.length === 0) {
+      setActivePF('');
+    } else if (!portfolios.some((portfolio) => portfolio.id === activePF)) {
+      setActivePF(portfolios[0].id);
+    }
+  }, [portfolios, activePF]);
 
   const pfRecords = records.filter((r) => r.portfolioId === activePF);
   const stats = activePF ? getPortfolioStats(activePF) : null;
-  const holdingMap = useMemo(() => activePF ? getHoldingMap(activePF) : {}, [activePF, records]);
+  const holdingMap = activePF ? getHoldingMap(activePF) : {};
 
   const watchSellStock = Form.useWatch('stockName', recForm);
   const watchSellShares = Form.useWatch('shares', recForm);
@@ -51,7 +57,7 @@ export default function StockPage() {
       if ('error' in result) setSellPreview(null);
       else setSellPreview({ costBasis: result.costBasis, sellRevenue: result.sellRevenue, profit: result.profit });
     } else setSellPreview(null);
-  }, [recordType, watchSellStock, watchSellShares, watchSellPrice, activePF]);
+  }, [recordType, watchSellStock, watchSellShares, watchSellPrice, activePF, calculateSellProfit]);
 
   const handleAddPF = () => { setEditingPF(null); pfForm.resetFields(); setPfModalOpen(true); };
   const handleEditPF = (pf: StockPortfolio) => { setEditingPF(pf); pfForm.setFieldsValue(pf); setPfModalOpen(true); };
@@ -209,8 +215,8 @@ export default function StockPage() {
 
               {holdingEntries.length > 0 && (
                 <Card title="📦 当前持仓" style={{ marginBottom: 16 }} size="small">
-                  <Table dataSource={holdingEntries.map(([name, d]) => ({ name, shares: d.shares, cost: d.totalCost, avgPrice: d.avgPrice }))}
-                    columns={holdingColumns} rowKey="name" pagination={false} size="small" />
+                  <ResponsiveTable dataSource={holdingEntries.map(([name, d]) => ({ name, shares: d.shares, cost: d.totalCost, avgPrice: d.avgPrice }))}
+                    columns={holdingColumns} rowKey="name" size="small" minWidth={520} />
                 </Card>
               )}
 
@@ -220,8 +226,8 @@ export default function StockPage() {
                   <Button icon={<MinusOutlined />} onClick={() => handleAddRecord('sell')} style={{ color: '#10b981', borderColor: '#10b981' }}>新增卖出</Button>
                 </Space>
               } style={{ marginBottom: 16 }}>
-                <Table dataSource={pfRecords} columns={recColumns} rowKey="id" pagination={false} size="small"
-                  locale={{ emptyText: '暂无交易记录，点击上方按钮开始记录 🚀' }} scroll={{ x: 850 }} />
+                <ResponsiveTable dataSource={pfRecords} columns={recColumns} rowKey="id" size="small"
+                  emptyText="暂无交易记录，点击上方按钮开始记录 🚀" minWidth={850} />
               </Card>
 
               {barOption && (
@@ -235,7 +241,7 @@ export default function StockPage() {
       )}
 
       <Modal title={editingPF ? '✏️ 编辑账户' : '➕ 添加账户'} open={pfModalOpen}
-        onOk={handlePFSubmit} onCancel={() => setPfModalOpen(false)} destroyOnClose width={420}>
+        onOk={handlePFSubmit} onCancel={() => setPfModalOpen(false)} destroyOnHidden width={420}>
         <Form form={pfForm} layout="vertical">
           <Form.Item name="name" label="📛 账户名称" rules={[{ required: true }]}>
             <Input placeholder="如：爸股票投资" />
@@ -248,7 +254,7 @@ export default function StockPage() {
 
       <Modal title={recordType === 'buy' ? '🟢 新增买入' : '🔴 新增卖出'} open={recordModalOpen}
         onOk={handleRecordSubmit} onCancel={() => { setRecordModalOpen(false); setSellPreview(null); }}
-        destroyOnClose width={500}>
+        destroyOnHidden width={500}>
         <Form form={recForm} layout="vertical">
           <Form.Item name="type" hidden><Input /></Form.Item>
           <Form.Item name="portfolioId" hidden><Input /></Form.Item>

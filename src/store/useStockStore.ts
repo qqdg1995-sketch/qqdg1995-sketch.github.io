@@ -1,10 +1,18 @@
 import { create } from 'zustand';
-import { fetchStockPortfolios, fetchStockRecords, saveStockPortfolios, saveStockRecords } from '../supabase/db';
+import {
+  deleteStockPortfolio, deleteStockRecord, fetchStockPortfolios, fetchStockRecords,
+  upsertStockPortfolio, upsertStockRecord,
+} from '../supabase/db';
 import type { StockPortfolio, StockRecord } from '../types';
+import { calculateAverageCost } from '../utils/finance';
 
 interface StockState {
   portfolios: StockPortfolio[];
   records: StockRecord[];
+  loadedPortfolioKey: string | null;
+  loadedRecordKey: string | null;
+  requestedPortfolioKey: string | null;
+  requestedRecordKey: string | null;
   loadPortfolios: (userId: string, year: number) => Promise<void>;
   loadRecords: (userId: string, year: number) => Promise<void>;
   addPortfolio: (userId: string, year: number, portfolio: Omit<StockPortfolio, 'id'>) => Promise<{ success: boolean; error?: string }>;
@@ -30,15 +38,25 @@ function generateId(): string {
 export const useStockStore = create<StockState>((set, get) => ({
   portfolios: [],
   records: [],
+  loadedPortfolioKey: null,
+  loadedRecordKey: null,
+  requestedPortfolioKey: null,
+  requestedRecordKey: null,
 
   loadPortfolios: async (userId, year) => {
+    const key = `${userId}:${year}`;
+    if (get().loadedPortfolioKey === key) return;
+    set({ requestedPortfolioKey: key });
     const portfolios = await fetchStockPortfolios(userId, year);
-    set({ portfolios });
+    if (get().requestedPortfolioKey === key) set({ portfolios, loadedPortfolioKey: key });
   },
 
   loadRecords: async (userId, year) => {
+    const key = `${userId}:${year}`;
+    if (get().loadedRecordKey === key) return;
+    set({ requestedRecordKey: key });
     const records = await fetchStockRecords(userId, year);
-    set({ records });
+    if (get().requestedRecordKey === key) set({ records, loadedRecordKey: key });
   },
 
   addPortfolio: async (userId, year, portfolio) => {
@@ -49,7 +67,7 @@ export const useStockStore = create<StockState>((set, get) => ({
     }
     const newPF: StockPortfolio = { ...portfolio, id: generateId() };
     const updated = [...portfolios, newPF];
-    await saveStockPortfolios(userId, year, updated);
+    await upsertStockPortfolio(userId, year, newPF);
     set({ portfolios: updated });
     return { success: true };
   },
@@ -57,7 +75,9 @@ export const useStockStore = create<StockState>((set, get) => ({
   updatePortfolio: async (userId, year, id, data) => {
     const { portfolios } = get();
     const updated = portfolios.map((p) => (p.id === id ? { ...p, ...data } : p));
-    await saveStockPortfolios(userId, year, updated);
+    const saved = updated.find((portfolio) => portfolio.id === id);
+    if (!saved) throw new Error('股票账户不存在');
+    await upsertStockPortfolio(userId, year, saved);
     set({ portfolios: updated });
   },
 
@@ -65,8 +85,7 @@ export const useStockStore = create<StockState>((set, get) => ({
     const { portfolios, records } = get();
     const updated = portfolios.filter((p) => p.id !== id);
     const newRecords = records.filter((r) => r.portfolioId !== id);
-    await saveStockPortfolios(userId, year, updated);
-    await saveStockRecords(userId, year, newRecords);
+    await deleteStockPortfolio(userId, year, id);
     set({ portfolios: updated, records: newRecords });
   },
 
@@ -78,18 +97,19 @@ export const useStockStore = create<StockState>((set, get) => ({
     if (record.type === 'buy') {
       const pfRecords = records.filter((r) => r.portfolioId === record.portfolioId);
       const existingBuyCost = pfRecords.filter((r) => r.type === 'buy').reduce((s, r) => s + r.totalCost, 0);
-      if (existingBuyCost + record.totalCost > pf.totalInvest) {
-        const remaining = pf.totalInvest - existingBuyCost;
+      const sellRevenue = pfRecords.filter((r) => r.type === 'sell').reduce((s, r) => s + r.totalCost, 0);
+      const available = pf.totalInvest + sellRevenue - existingBuyCost;
+      if (record.totalCost > available) {
         return {
           success: false,
-          error: `⚠️ 超过总投资金额！当前已买入 ¥${existingBuyCost.toLocaleString()}，剩余可用 ¥${remaining.toLocaleString()}`,
+          error: `⚠️ 超过可用资金！当前可用 ¥${available.toLocaleString()}`,
         };
       }
     }
 
     const newRecord: StockRecord = { ...record, id: generateId() };
-    const updated = [...records, newRecord].sort((a, b) => b.date.localeCompare(a.date));
-    await saveStockRecords(userId, year, updated);
+    const updated = [...records, newRecord].sort((a, b) => a.date.localeCompare(b.date));
+    await upsertStockRecord(userId, year, newRecord);
     set({ records: updated });
     return { success: true };
   },
@@ -97,49 +117,42 @@ export const useStockStore = create<StockState>((set, get) => ({
   updateRecord: async (userId, year, id, data) => {
     const { records } = get();
     const updated = records.map((r) => (r.id === id ? { ...r, ...data } : r));
-    await saveStockRecords(userId, year, updated);
+    const saved = updated.find((record) => record.id === id);
+    if (!saved) throw new Error('股票记录不存在');
+    await upsertStockRecord(userId, year, saved);
     set({ records: updated });
   },
 
   deleteRecord: async (userId, year, id) => {
     const { records } = get();
     const updated = records.filter((r) => r.id !== id);
-    await saveStockRecords(userId, year, updated);
+    await deleteStockRecord(userId, year, id);
     set({ records: updated });
   },
 
   getHoldingMap: (portfolioId) => {
     const { records } = get();
-    const pfRecords = records.filter((r) => r.portfolioId === portfolioId);
-
-    const holdingMap: Record<string, { shares: number; totalCost: number }> = {};
-    for (const r of pfRecords) {
-      if (!holdingMap[r.stockName]) holdingMap[r.stockName] = { shares: 0, totalCost: 0 };
-      if (r.type === 'buy') {
-        holdingMap[r.stockName].shares += r.shares;
-        holdingMap[r.stockName].totalCost += r.totalCost;
-      } else if (r.type === 'sell') {
-        const beforeRecords = pfRecords.filter((x) => x.date < r.date || (x.date === r.date && x.type === 'buy'));
-        const beforeBuys = beforeRecords.filter((x) => x.type === 'buy' && x.stockName === r.stockName);
-        const beforeSells = beforeRecords.filter((x) => x.type === 'sell' && x.stockName === r.stockName);
-        const totalBought = beforeBuys.reduce((s, x) => s + x.shares, 0);
-        const totalSoldBefore = beforeSells.reduce((s, x) => s + x.shares, 0);
-        const availShares = totalBought - totalSoldBefore;
-        const sharesToSell = Math.min(r.shares, availShares);
-        holdingMap[r.stockName].shares -= sharesToSell;
-        if (holdingMap[r.stockName].shares > 0 && holdingMap[r.stockName].totalCost > 0 && totalBought > 0) {
-          const avgCost = beforeBuys.reduce((s, x) => s + x.totalCost, 0) / totalBought;
-          holdingMap[r.stockName].totalCost -= avgCost * sharesToSell;
-        } else {
-          holdingMap[r.stockName].totalCost = Math.max(0, holdingMap[r.stockName].totalCost);
-        }
-      }
-    }
-
     const result: Record<string, { shares: number; totalCost: number; avgPrice: number }> = {};
-    for (const [name, data] of Object.entries(holdingMap)) {
-      if (data.shares > 0) {
-        result[name] = { shares: data.shares, totalCost: data.totalCost, avgPrice: data.totalCost / data.shares };
+    const names = [...new Set(records
+      .filter((record) => record.portfolioId === portfolioId)
+      .map((record) => record.stockName))];
+
+    for (const name of names) {
+      const stockRecords = records
+        .filter((record) => record.portfolioId === portfolioId && record.stockName === name)
+        .map((record) => ({
+          date: record.date,
+          type: record.type,
+          quantity: record.shares,
+          value: record.totalCost,
+        }));
+      const position = calculateAverageCost(stockRecords);
+      if (position.holding > 0) {
+        result[name] = {
+          shares: position.holding,
+          totalCost: position.costBasis,
+          avgPrice: position.costBasis / position.holding,
+        };
       }
     }
     return result;
@@ -169,10 +182,14 @@ export const useStockStore = create<StockState>((set, get) => ({
     const pfRecords = records.filter((r) => r.portfolioId === portfolioId);
 
     let totalBuyCost = 0;
+    let totalSellRevenue = 0;
     let recoveredProfit = 0;
     for (const r of pfRecords) {
       if (r.type === 'buy') totalBuyCost += r.totalCost;
-      else if (r.type === 'sell') recoveredProfit += r.profit || 0;
+      else if (r.type === 'sell') {
+        totalSellRevenue += r.totalCost;
+        recoveredProfit += r.profit || 0;
+      }
     }
 
     const holdingMap = get().getHoldingMap(portfolioId);
@@ -180,8 +197,8 @@ export const useStockStore = create<StockState>((set, get) => ({
     for (const [, data] of Object.entries(holdingMap)) {
       holdingCost += data.totalCost;
     }
-    const idleFunds = Math.max(0, totalInvest - holdingCost);
+    const idleFunds = Math.max(0, totalInvest + recoveredProfit - holdingCost);
 
-    return { totalInvest, totalBuyCost, totalSellRevenue: 0, recoveredProfit, holdingCost, idleFunds };
+    return { totalInvest, totalBuyCost, totalSellRevenue, recoveredProfit, holdingCost, idleFunds };
   },
 }));

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, Spin, message, Statistic, Row, Col, DatePicker, Select } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, Spin, message, Statistic, Row, Col, DatePicker, Select } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +7,8 @@ import { useAUDStore } from '../store/useAUDStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { AUDRecord, AUDInterestRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
+import { calculateAverageCost } from '../utils/finance';
 
 export default function AUDPage() {
   const { user } = useAuthStore();
@@ -19,60 +21,47 @@ export default function AUDPage() {
   const [rateForm] = Form.useForm();
   const [interestForm] = Form.useForm();
   const [form] = Form.useForm();
-  const [calcRMB, setCalcRMB] = useState(0);
 
   const userId = user?.id || '';
   const year = currentYear!;
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   // Compute stats with average-cost method
   const stats = useMemo(() => {
-    let totalBuyCost = 0, totalRealizedProfit = 0, totalInterest = 0;
-    let holding = 0, costBasis = 0;
-    const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-    for (const r of sorted) {
-      if (r.type === 'buy') {
-        totalBuyCost += r.rmb;
-        holding += r.amount;
-        costBasis += r.rmb;
-      } else {
-        // Average cost: cost of sold = amount * (total cost / total holding before sell)
-        const avgCost = holding > 0 ? costBasis / holding : 0;
-        const costOfSold = r.amount * avgCost;
-        totalRealizedProfit += (r.rmb - costOfSold);
-        holding -= r.amount;
-        costBasis -= costOfSold;
-      }
-    }
-    totalInterest = interestRecords.reduce((s, r) => s + r.amount, 0);
-    const holdingProfit = holding * rate / 100 - costBasis;
-    const totalProfit = totalRealizedProfit + totalInterest; // 总计盈利 = 已实现买卖盈利 + 利息（不含持仓浮动）
-    return { totalProfit, holdingProfit, totalRealizedProfit, totalBuyCost, totalInterest, currentHolding: holding };
+    const position = calculateAverageCost(records.map((record) => ({
+      date: record.date, type: record.type, quantity: record.amount, value: record.rmb,
+    })));
+    const totalInterest = interestRecords.reduce((sum, record) => sum + record.amount, 0);
+    const holdingProfit = position.holding * rate / 100 - position.costBasis;
+    return {
+      totalProfit: position.realizedProfit + totalInterest,
+      holdingProfit,
+      totalRealizedProfit: position.realizedProfit,
+      totalBuyCost: position.totalBuyCost,
+      totalInterest,
+      currentHolding: position.holding,
+    };
   }, [records, interestRecords, rate]);
 
   const watchRate = Form.useWatch('rate', form);
   const watchAmount = Form.useWatch('amount', form);
-  useEffect(() => {
-    if (watchRate && watchAmount) {
-      setCalcRMB(Math.round(watchAmount * watchRate / 100 * 100) / 100);
-    } else setCalcRMB(0);
-  }, [watchRate, watchAmount]);
+  const calcRMB = watchRate && watchAmount
+    ? Math.round(watchAmount * watchRate / 100 * 100) / 100
+    : 0;
 
   const handleAdd = (type: 'buy' | 'sell') => {
     setEditingRecord(null);
     form.resetFields();
     form.setFieldsValue({ type, rate });
-    setCalcRMB(0);
     setModalOpen(true);
   };
 
   const handleEdit = (record: AUDRecord) => {
     setEditingRecord(record);
     form.setFieldsValue({ ...record, date: dayjs(record.date) });
-    setCalcRMB(record.rmb);
     setModalOpen(true);
   };
 
@@ -82,7 +71,17 @@ export default function AUDPage() {
         id: editingRecord?.id || '', date: values.date.format('YYYY-MM-DD'),
         type: values.type, rate: values.rate, amount: values.amount, rmb: calcRMB,
       };
-      if (editingRecord) await deleteRecord(userId, year, editingRecord.id);
+      try {
+        calculateAverageCost([
+          ...records.filter((record) => record.id !== editingRecord?.id),
+          data,
+        ].map((record) => ({
+          date: record.date, type: record.type, quantity: record.amount, value: record.rmb,
+        })));
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '卖出数量超过当前持仓');
+        return;
+      }
       await addRecord(userId, year, data);
       setModalOpen(false);
       message.success(editingRecord ? '已更新' : '已添加');
@@ -103,7 +102,7 @@ export default function AUDPage() {
   };
 
   const handleInterestSubmit = () => {
-    interestForm.validateFields().then(async (values: any) => {
+    interestForm.validateFields().then(async (values) => {
       await addInterest(userId, year, {
         id: '', date: values.date.format('YYYY-MM-DD'), amount: values.amount, note: values.note || '',
       });
@@ -112,26 +111,25 @@ export default function AUDPage() {
     });
   };
 
-  // Prepare sorted records for chart with average-cost method
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-  let cumulativeBuy = 0, cumulativeCost = 0;
-  const allInterestSorted = [...interestRecords].sort((a, b) => a.date.localeCompare(b.date));
+  // Merge trades and interest into one chronological trend.
+  const trendEvents = [
+    ...records.map((record) => ({ date: record.date, kind: 'trade' as const, record })),
+    ...interestRecords.map((record) => ({ date: record.date, kind: 'interest' as const, record })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+  const trendTrades: AUDRecord[] = [];
   const profitTrend: { date: string; profit: number }[] = [];
-  let interestIdx = 0;
-  for (const r of sorted) {
-    while (interestIdx < allInterestSorted.length && allInterestSorted[interestIdx].date <= r.date) {
-      profitTrend.push({ date: allInterestSorted[interestIdx].date, profit: cumulativeBuy * rate / 100 - cumulativeCost + allInterestSorted[interestIdx].amount });
-      interestIdx++;
-    }
-    if (r.type === 'buy') {
-      cumulativeBuy += r.amount;
-      cumulativeCost += r.rmb;
-    } else {
-      const avgCost = cumulativeBuy > 0 ? cumulativeCost / cumulativeBuy : 0;
-      cumulativeBuy -= r.amount;
-      cumulativeCost -= r.amount * avgCost;
-    }
-    profitTrend.push({ date: r.date, profit: cumulativeBuy * rate / 100 - cumulativeCost + allInterestSorted.slice(0, interestIdx).reduce((s, i) => s + i.amount, 0) });
+  let cumulativeInterest = 0;
+  for (const event of trendEvents) {
+    if (event.kind === 'trade') trendTrades.push(event.record);
+    else cumulativeInterest += event.record.amount;
+    const position = calculateAverageCost(trendTrades.map((record) => ({
+      date: record.date, type: record.type, quantity: record.amount, value: record.rmb,
+    })));
+    profitTrend.push({
+      date: event.date,
+      profit: position.realizedProfit + cumulativeInterest
+        + (position.holding * rate / 100 - position.costBasis),
+    });
   }
 
   const chartOption = {
@@ -218,15 +216,14 @@ export default function AUDPage() {
           <Button icon={<PlusOutlined />} onClick={() => handleAdd('sell')}>新增卖出</Button>
         </Space>
       } style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={tradeCols} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无记录' }} />
+        <ResponsiveTable dataSource={records} columns={tradeCols} rowKey="id" />
       </Card>
 
       <Card title="💰 利息记录" extra={
         <Button icon={<PlusOutlined />} onClick={() => { interestForm.resetFields(); setInterestModalOpen(true); }}>记录利息</Button>
       } style={{ marginBottom: 16 }}>
-        <Table dataSource={interestRecords} columns={interestCols} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无利息记录' }} />
+        <ResponsiveTable dataSource={interestRecords} columns={interestCols} rowKey="id"
+          emptyText="暂无利息记录" />
       </Card>
 
       <Card title="📈 盈利走势图" style={{ marginBottom: 16 }}>
@@ -235,7 +232,7 @@ export default function AUDPage() {
 
       {/* Trade Modal */}
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增记录'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={480}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={480}>
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="操作类型" rules={[{ required: true }]}>
             <Select options={[{ label: '📥 买进', value: 'buy' }, { label: '📤 卖出', value: 'sell' }]} disabled={!!editingRecord} />
@@ -266,7 +263,7 @@ export default function AUDPage() {
       </Modal>
 
       {/* Interest Modal */}
-      <Modal title="💰 记录利息" open={interestModalOpen} onOk={handleInterestSubmit} onCancel={() => setInterestModalOpen(false)} destroyOnClose>
+      <Modal title="💰 记录利息" open={interestModalOpen} onOk={handleInterestSubmit} onCancel={() => setInterestModalOpen(false)} destroyOnHidden>
         <Form form={interestForm} layout="vertical">
           <Form.Item name="date" label="📅 日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />

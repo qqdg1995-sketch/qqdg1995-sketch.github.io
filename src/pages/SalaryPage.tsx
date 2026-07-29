@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, Spin } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
 import { useSalaryStore } from '../store/useSalaryStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { SalaryRecord } from '../types';
+import ResponsiveTable from '../components/ResponsiveTable';
 
 export default function SalaryPage() {
   const { user } = useAuthStore();
@@ -20,7 +21,7 @@ export default function SalaryPage() {
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   // Build monthly data (computed from records)
   const monthlyData = useMemo(() => {
@@ -53,6 +54,10 @@ export default function SalaryPage() {
           expense: values.expense || 0,
         });
       } else {
+        if (records.some((record) => record.month === values.month)) {
+          message.error(`${values.month}月已经有工资记录，请直接编辑原记录`);
+          return;
+        }
         await addRecord(userId, year, {
           id: '', month: values.month, salary: values.salary, expense: values.expense || 0,
         });
@@ -119,8 +124,8 @@ export default function SalaryPage() {
       <Card title="📋 每月工资单"
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>添加月份记录</Button>}
         style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={columns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无记录，点击"添加月份记录"开始记账吧 ✍️' }} />
+        <ResponsiveTable dataSource={records} columns={columns} rowKey="id"
+          emptyText={'暂无记录，点击"添加月份记录"开始记账吧 ✍️'} />
       </Card>
 
       <Card title="📊 收支对比图" style={{ marginBottom: 16 }}>
@@ -128,7 +133,7 @@ export default function SalaryPage() {
       </Card>
 
       <Modal title={editingRecord ? '✏️ 编辑工资记录' : '➕ 添加工资记录'}
-        open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={440}>
+        open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={440}>
         <Form form={form} layout="vertical">
           <Form.Item name="month" label="📅 月份" rules={[{ required: true, message: '请选择月份' }]}>
             <InputNumber min={1} max={12} placeholder="1-12" style={{ width: '100%' }} disabled={!!editingRecord} />

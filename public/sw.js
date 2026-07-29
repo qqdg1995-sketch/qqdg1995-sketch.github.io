@@ -1,5 +1,5 @@
 // Service Worker for Personal Finance PWA
-const CACHE_NAME = 'pf-cache-v4';
+const CACHE_NAME = 'pf-cache-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -31,6 +31,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Skip Supabase API calls
   if (event.request.url.includes('supabase.co')) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then((response) => (
+        response.ok ? response : caches.match('/index.html')
+      )).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)

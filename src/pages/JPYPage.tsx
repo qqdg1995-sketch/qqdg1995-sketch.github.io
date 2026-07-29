@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +7,8 @@ import { useJPYStore } from '../store/useJPYStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { JPYRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
+import { calculateAverageCost } from '../utils/finance';
 
 export default function JPYPage() {
   const { user } = useAuthStore();
@@ -17,60 +19,46 @@ export default function JPYPage() {
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [rateForm] = Form.useForm();
   const [form] = Form.useForm();
-  const [calcRMB, setCalcRMB] = useState(0);
 
   const userId = user?.id || '';
   const year = currentYear!;
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   // Compute stats with average-cost method
   const stats = useMemo(() => {
-    let totalBuyCost = 0, totalRealizedProfit = 0;
-    let holding = 0, costBasis = 0;
-    const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-    for (const r of sorted) {
-      if (r.type === 'buy') {
-        totalBuyCost += r.rmb;
-        holding += r.amount;
-        costBasis += r.rmb;
-      } else {
-        // Average cost: cost of sold = amount * (total cost / total holding before sell)
-        const avgCost = holding > 0 ? costBasis / holding : 0;
-        const costOfSold = r.amount * avgCost;
-        totalRealizedProfit += (r.rmb - costOfSold);
-        holding -= r.amount;
-        costBasis -= costOfSold;
-      }
-    }
-    const holdingProfit = holding * rate / 100 - costBasis;
-    const totalProfit = totalRealizedProfit; // 总计盈利 = 已实现盈利（不含持仓浮动）
-    return { totalProfit, holdingProfit, totalRealizedProfit, totalBuyCost, currentHolding: holding };
+    const position = calculateAverageCost(records.map((record) => ({
+      date: record.date, type: record.type, quantity: record.amount, value: record.rmb,
+    })));
+    const holdingProfit = position.holding * rate / 100 - position.costBasis;
+    return {
+      totalProfit: position.realizedProfit,
+      holdingProfit,
+      totalRealizedProfit: position.realizedProfit,
+      totalBuyCost: position.totalBuyCost,
+      currentHolding: position.holding,
+    };
   }, [records, rate]);
 
   // Watch form for auto-calc
   const watchRate = Form.useWatch('rate', form);
   const watchAmount = Form.useWatch('amount', form);
-  useEffect(() => {
-    if (watchRate && watchAmount) {
-      setCalcRMB(Math.round(watchAmount * watchRate / 100 * 100) / 100);
-    } else setCalcRMB(0);
-  }, [watchRate, watchAmount]);
+  const calcRMB = watchRate && watchAmount
+    ? Math.round(watchAmount * watchRate / 100 * 100) / 100
+    : 0;
 
   const handleAdd = (type: 'buy' | 'sell') => {
     setEditingRecord(null);
     form.resetFields();
     form.setFieldsValue({ type, rate });
-    setCalcRMB(0);
     setModalOpen(true);
   };
 
   const handleEdit = (record: JPYRecord) => {
     setEditingRecord(record);
     form.setFieldsValue({ ...record, date: dayjs(record.date) });
-    setCalcRMB(record.rmb);
     setModalOpen(true);
   };
 
@@ -84,9 +72,16 @@ export default function JPYPage() {
         amount: values.amount,
         rmb: calcRMB,
       };
-      if (editingRecord) {
-        // Delete old + add new (simpler than update since we don't have update for JPY)
-        await deleteRecord(userId, year, editingRecord.id);
+      try {
+        calculateAverageCost([
+          ...records.filter((record) => record.id !== editingRecord?.id),
+          data,
+        ].map((record) => ({
+          date: record.date, type: record.type, quantity: record.amount, value: record.rmb,
+        })));
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '卖出数量超过当前持仓');
+        return;
       }
       await addRecord(userId, year, data);
       setModalOpen(false);
@@ -196,8 +191,7 @@ export default function JPYPage() {
           <Button icon={<PlusOutlined />} onClick={() => handleAdd('sell')}>新增卖出</Button>
         </Space>
       } style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={columns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无记录' }} />
+        <ResponsiveTable dataSource={records} columns={columns} rowKey="id" />
       </Card>
 
       <Card title="📈 盈利走势图" style={{ marginBottom: 16 }}>
@@ -205,7 +199,7 @@ export default function JPYPage() {
       </Card>
 
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增记录'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={480}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={480}>
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="操作类型" rules={[{ required: true }]}>
             <Select options={[{ label: '📥 买进', value: 'buy' }, { label: '📤 卖出', value: 'sell' }]} disabled={!!editingRecord} />

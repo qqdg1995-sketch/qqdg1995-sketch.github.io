@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin, Divider } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin, Divider } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -8,6 +8,7 @@ import { useIncomeRecoveryStore } from '../store/useIncomeRecoveryStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { BigExpenseRecord, IncomeRecoveryRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
 
 const expenseCategories = [
   { label: '🍔 餐饮美食', value: '餐饮美食' },
@@ -63,7 +64,7 @@ export default function BigExpensePage() {
       loadRecords(userId, currentYear);
       loadIncomeRecords(userId, currentYear);
     }
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords, loadIncomeRecords]);
 
   // ─── 大额消费统计 ───────────────
   const expenseStats = useMemo(() => {
@@ -99,7 +100,6 @@ export default function BigExpensePage() {
         id: editingRecord?.id || '', date: values.date.format('YYYY-MM-DD'),
         category: values.category, amount: values.amount, note: values.note || '',
       };
-      if (editingRecord) await deleteRecord(userId, year, editingRecord.id);
       await addRecord(userId, year, data);
       setModalOpen(false);
       message.success(editingRecord ? '已更新' : '已添加');
@@ -130,7 +130,6 @@ export default function BigExpensePage() {
         id: editingIncomeRecord?.id || '', date: values.date.format('YYYY-MM-DD'),
         category: values.category, amount: values.amount, note: values.note || '',
       };
-      if (editingIncomeRecord) await deleteIncomeRecord(userId, year, editingIncomeRecord.id);
       await addIncomeRecord(userId, year, data);
       setIncomeModalOpen(false);
       message.success(editingIncomeRecord ? '已更新' : '已添加');
@@ -171,7 +170,7 @@ export default function BigExpensePage() {
   };
 
   const barOption = {
-    tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}<br/>大额消费: ¥${p[0].value.toLocaleString()}` },
+    tooltip: { trigger: 'axis', formatter: (p: Array<{ name: string; value: number }>) => `${p[0].name}<br/>大额消费: ¥${p[0].value.toLocaleString()}` },
     grid: { left: 80, right: 20, top: 20, bottom: 50 },
     xAxis: { type: 'category', data: months, axisLabel: { rotate: 30, fontSize: 11, interval: 0 } },
     yAxis: { type: 'value', name: '元 (¥)' },
@@ -250,8 +249,8 @@ export default function BigExpensePage() {
       <Card title="🛒 大额消费记录"
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增记录</Button>}
         style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={expenseColumns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无大额消费记录' }} />
+        <ResponsiveTable dataSource={records} columns={expenseColumns} rowKey="id"
+          emptyText="暂无大额消费记录" />
       </Card>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
@@ -277,13 +276,13 @@ export default function BigExpensePage() {
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleIncomeAdd}
           style={{ background: '#10b981', borderColor: '#10b981' }}>新增收入</Button>}
         style={{ marginBottom: 16 }}>
-        <Table dataSource={incomeRecords} columns={incomeColumns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无收入回血记录' }} />
+        <ResponsiveTable dataSource={incomeRecords} columns={incomeColumns} rowKey="id"
+          emptyText="暂无收入回血记录" />
       </Card>
 
       {/* 大额消费弹窗 */}
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增大额消费'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={440}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={440}>
         <Form form={form} layout="vertical">
           <Form.Item name="date" label="📅 日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />
@@ -303,7 +302,7 @@ export default function BigExpensePage() {
 
       {/* 收入回血弹窗 */}
       <Modal title={editingIncomeRecord ? '✏️ 编辑收入回血' : '💰 新增收入回血'} open={incomeModalOpen}
-        onOk={handleIncomeSubmit} onCancel={() => setIncomeModalOpen(false)} destroyOnClose width={440}>
+        onOk={handleIncomeSubmit} onCancel={() => setIncomeModalOpen(false)} destroyOnHidden width={440}>
         <Form form={incomeForm} layout="vertical">
           <Form.Item name="date" label="📅 日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />

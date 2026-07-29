@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Spin } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +7,7 @@ import { useBonusStore } from '../store/useBonusStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { BonusRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
 
 export default function BonusPage() {
   const { user } = useAuthStore();
@@ -21,7 +22,7 @@ export default function BonusPage() {
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   const stats = useMemo(() => {
     const totalBonus = records.reduce((s, r) => s + r.amount, 0);
@@ -50,9 +51,6 @@ export default function BonusPage() {
         amount: values.amount,
         note: values.note || '',
       };
-      if (editingRecord) {
-        await deleteRecord(userId, year, editingRecord.id);
-      }
       await addRecord(userId, year, data);
       setModalOpen(false);
       message.success(editingRecord ? '已更新' : '已添加');
@@ -73,7 +71,7 @@ export default function BonusPage() {
   const months = Object.keys(monthlyMap).sort();
 
   const barOption = {
-    tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}<br/>奖金: ¥${p[0].value.toLocaleString()}` },
+    tooltip: { trigger: 'axis', formatter: (p: Array<{ name: string; value: number }>) => `${p[0].name}<br/>奖金: ¥${p[0].value.toLocaleString()}` },
     grid: { left: 80, right: 20, top: 20, bottom: 50 },
     xAxis: { type: 'category', data: months, axisLabel: { rotate: 30, fontSize: 11, interval: 0 } },
     yAxis: { type: 'value', name: '元 (¥)' },
@@ -121,8 +119,8 @@ export default function BonusPage() {
       <Card title="🎁 奖金收入记录"
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增记录</Button>}
         style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={columns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无奖金记录' }} />
+        <ResponsiveTable dataSource={records} columns={columns} rowKey="id"
+          emptyText="暂无奖金记录" />
       </Card>
 
       <Card title="📈 月度奖金趋势">
@@ -130,7 +128,7 @@ export default function BonusPage() {
       </Card>
 
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增奖金收入'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={440}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={440}>
         <Form form={form} layout="vertical">
           <Form.Item name="date" label="📅 日期" rules={[{ required: true, message: '请选择日期' }]}>
             <DatePicker style={{ width: '100%' }} />

@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { supabase } from '../supabase/client';
 import type { User } from '@supabase/supabase-js';
 
+const CACHED_USER_KEY = 'pf_cached_user';
+let authSubscription: { unsubscribe: () => void } | null = null;
+
 interface AuthState {
   user: User | null;
   loading: boolean;
@@ -13,18 +16,39 @@ interface AuthState {
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
   error: null,
 
   init: async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    set({ user: session?.user || null, loading: false });
+    try {
+      const cached = localStorage.getItem(CACHED_USER_KEY);
+      if (cached) {
+        const cachedUser = JSON.parse(cached) as User;
+        if (cachedUser.id) set({ user: cachedUser, loading: false });
+      }
+    } catch {
+      localStorage.removeItem(CACHED_USER_KEY);
+    }
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ user: session?.user || null });
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
+    if (user) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(CACHED_USER_KEY);
+
+    if (get().user?.id !== user?.id) set({ user, loading: false });
+    else set({ loading: false });
+
+    authSubscription?.unsubscribe();
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUser = nextSession?.user ?? null;
+      if (nextUser) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(nextUser));
+      else localStorage.removeItem(CACHED_USER_KEY);
+
+      if (get().user?.id !== nextUser?.id) set({ user: nextUser });
     });
+    authSubscription = data.subscription;
   },
 
   signUp: async (email, password) => {
@@ -49,6 +73,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem(CACHED_USER_KEY);
     set({ user: null });
   },
 

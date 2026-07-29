@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Input, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +7,7 @@ import { useParentStore } from '../store/useParentStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { ParentRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
 
 export default function ParentPage() {
   const { user } = useAuthStore();
@@ -21,7 +22,7 @@ export default function ParentPage() {
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   const stats = useMemo(() => {
     const totalSave = records.filter((r) => r.type === 'save').reduce((s, r) => s + r.amount, 0);
@@ -48,7 +49,6 @@ export default function ParentPage() {
         id: editingRecord?.id || '', date: values.date.format('YYYY-MM-DD'),
         type: values.type, amount: values.amount, note: values.note || '',
       };
-      if (editingRecord) await deleteRecord(userId, year, editingRecord.id);
       await addRecord(userId, year, data);
       setModalOpen(false);
       message.success(editingRecord ? '已更新' : '已添加');
@@ -128,8 +128,7 @@ export default function ParentPage() {
       <Card title="👨‍👩‍👧 爸妈援助记录"
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增记录</Button>}
         style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={columns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无记录' }} />
+        <ResponsiveTable dataSource={records} columns={columns} rowKey="id" />
       </Card>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -138,7 +137,7 @@ export default function ParentPage() {
       </Row>
 
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增记录'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={440}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={440}>
         <Form form={form} layout="vertical">
           <Form.Item name="date" label="📅 日期" rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
+import { Card, Button, Modal, Form, InputNumber, Space, Popconfirm, message, Statistic, Row, Col, DatePicker, Select, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useYearStore } from '../store/useYearStore';
@@ -7,6 +7,8 @@ import { useGoldStore } from '../store/useGoldStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { GoldRecord } from '../types';
 import dayjs from 'dayjs';
+import ResponsiveTable from '../components/ResponsiveTable';
+import { calculateAverageCost } from '../utils/finance';
 
 export default function GoldPage() {
   const { user } = useAuthStore();
@@ -23,32 +25,20 @@ export default function GoldPage() {
 
   useEffect(() => {
     if (userId && currentYear) loadRecords(userId, currentYear);
-  }, [userId, currentYear]);
+  }, [userId, currentYear, loadRecords]);
 
   // ─── 统计数据（平均成本法）─────────────────
   const stats = useMemo(() => {
-    let totalRealizedProfit = 0, holding = 0, costBasis = 0, totalBuyCost = 0;
-    const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
-    for (const r of sorted) {
-      if (r.type === 'buy') {
-        totalBuyCost += r.amount;
-        holding += r.shares;
-        costBasis += r.amount;
-      } else {
-        const avgCost = holding > 0 ? costBasis / holding : 0;
-        const costOfSold = r.shares * avgCost;
-        totalRealizedProfit += (r.amount - costOfSold);
-        holding -= r.shares;
-        costBasis -= costOfSold;
-      }
-    }
-    const holdingProfit = holding * rate - costBasis;
+    const position = calculateAverageCost(records.map((record) => ({
+      date: record.date, type: record.type, quantity: record.shares, value: record.amount,
+    })));
+    const holdingProfit = position.holding * rate - position.costBasis;
     return {
-      totalProfit: totalRealizedProfit,       // 总计盈利 = 仅已实现
+      totalProfit: position.realizedProfit,
       holdingProfit,
-      totalRealizedProfit,
-      totalBuyCost,
-      currentHolding: Math.max(0, holding),
+      totalRealizedProfit: position.realizedProfit,
+      totalBuyCost: position.totalBuyCost,
+      currentHolding: position.holding,
     };
   }, [records, rate]);
 
@@ -85,8 +75,16 @@ export default function GoldPage() {
         nav: values.nav,
         amount: values.shares * values.nav,
       };
-      if (editingRecord) {
-        await deleteRecord(userId, year, editingRecord.id);
+      try {
+        calculateAverageCost([
+          ...records.filter((record) => record.id !== editingRecord?.id),
+          data,
+        ].map((record) => ({
+          date: record.date, type: record.type, quantity: record.shares, value: record.amount,
+        })));
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '卖出份额超过当前持仓');
+        return;
       }
       await addRecord(userId, year, data);
       setModalOpen(false);
@@ -230,8 +228,8 @@ export default function GoldPage() {
           <Button icon={<PlusOutlined />} onClick={() => handleAdd('sell')}>新增卖出</Button>
         </Space>
       } style={{ marginBottom: 16 }}>
-        <Table dataSource={records} columns={columns} rowKey="id" pagination={false} size="middle"
-          locale={{ emptyText: '暂无交易记录' }} />
+        <ResponsiveTable dataSource={records} columns={columns} rowKey="id"
+          emptyText="暂无交易记录" />
       </Card>
 
       {/* 持仓盈利走势图 */}
@@ -246,7 +244,7 @@ export default function GoldPage() {
 
       {/* 新增/编辑弹窗 */}
       <Modal title={editingRecord ? '✏️ 编辑记录' : '➕ 新增记录'} open={modalOpen}
-        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnClose width={440}>
+        onOk={handleSubmit} onCancel={() => setModalOpen(false)} destroyOnHidden width={440}>
         <Form form={form} layout="vertical">
           <Form.Item name="type" label="操作类型" rules={[{ required: true }]}>
             <Select options={[{ label: '📥 买入', value: 'buy' }, { label: '📤 卖出', value: 'sell' }]} disabled={!!editingRecord} />

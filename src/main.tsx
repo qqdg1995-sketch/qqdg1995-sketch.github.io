@@ -1,13 +1,18 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, message } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import App from './App';
 import './index.css';
 
+window.addEventListener('unhandledrejection', (event) => {
+  const text = event.reason instanceof Error ? event.reason.message : '操作失败，请检查网络后重试';
+  message.error(text);
+});
+
 // Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(
       (reg) => console.log('SW registered:', reg.scope),

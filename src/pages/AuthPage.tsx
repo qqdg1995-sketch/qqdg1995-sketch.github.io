@@ -72,7 +72,7 @@ export default function AuthPage() {
               { type: 'email', message: '请输入有效邮箱' },
             ]}
           >
-            <Input prefix={<MailOutlined />} placeholder="your@email.com" />
+            <Input prefix={<MailOutlined />} placeholder="your@email.com" autoComplete="email" />
           </Form.Item>
 
           <Form.Item
@@ -83,7 +83,8 @@ export default function AuthPage() {
               { min: 6, message: '密码至少6位' },
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="至少6位密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder="至少6位密码"
+              autoComplete={activeTab === 'login' ? 'current-password' : 'new-password'} />
           </Form.Item>
 
           <Form.Item>
