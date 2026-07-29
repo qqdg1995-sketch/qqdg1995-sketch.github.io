@@ -1,0 +1,48 @@
+name: Supabase 每日云端心跳
+
+on:
+  schedule:
+    - cron: '17 11 * * *'
+      timezone: Asia/Shanghai
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-daily-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    name: 访问数据库
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - name: 检查云端配置
+        shell: bash
+        run: |
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_ANON_KEY" ]]; then
+            echo "缺少 Supabase 云端配置"
+            exit 1
+          fi
+
+      - name: 发送只读心跳
+        shell: bash
+        run: |
+          curl \
+            --fail-with-body \
+            --show-error \
+            --silent \
+            --retry 3 \
+            --retry-all-errors \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --output /dev/null \
+            "${SUPABASE_URL%/}/rest/v1/settings?select=value&limit=1" \
+            --header "apikey: $SUPABASE_ANON_KEY" \
+            --header "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            --header "Accept: application/json"
