@@ -1,10 +1,18 @@
-name: Supabase 每日云端心跳
+name: Supabase 与仓库云端保活
 
 on:
   schedule:
     - cron: '17 11 * * *'
       timezone: Asia/Shanghai
+    - cron: '23 10 1 * *'
+      timezone: Asia/Shanghai
   workflow_dispatch:
+    inputs:
+      run_repository_keepalive:
+        description: 同时执行一次仓库保活提交
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -46,3 +54,30 @@ jobs:
             --header "apikey: $SUPABASE_ANON_KEY" \
             --header "Authorization: Bearer $SUPABASE_ANON_KEY" \
             --header "Accept: application/json"
+
+  repository-keepalive:
+    name: 更新仓库保活记录
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '23 10 1 * *') ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_repository_keepalive == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: 获取仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 提交保活记录
+        shell: bash
+        run: |
+          printf 'Last repository keepalive: %s\n' \
+            "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+            > .github/heartbeat-activity.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/heartbeat-activity.txt
+          git commit -m "chore: monthly repository keepalive"
+          git push origin HEAD:main
