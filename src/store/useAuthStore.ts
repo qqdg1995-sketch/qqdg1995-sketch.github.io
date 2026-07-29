@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../supabase/client';
 import type { User } from '@supabase/supabase-js';
+import { startHeartbeat, stopHeartbeat } from '../utils/heartbeat';
 
 const CACHED_USER_KEY = 'pf_cached_user';
 let authSubscription: { unsubscribe: () => void } | null = null;
@@ -34,8 +35,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
-    if (user) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
-    else localStorage.removeItem(CACHED_USER_KEY);
+    if (user) {
+      localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+      startHeartbeat();
+    } else {
+      localStorage.removeItem(CACHED_USER_KEY);
+      stopHeartbeat();
+    }
 
     if (get().user?.id !== user?.id) set({ user, loading: false });
     else set({ loading: false });
@@ -43,8 +49,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     authSubscription?.unsubscribe();
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       const nextUser = nextSession?.user ?? null;
-      if (nextUser) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(nextUser));
-      else localStorage.removeItem(CACHED_USER_KEY);
+      if (nextUser) {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(nextUser));
+        startHeartbeat();
+      } else {
+        localStorage.removeItem(CACHED_USER_KEY);
+        stopHeartbeat();
+      }
 
       if (get().user?.id !== nextUser?.id) set({ user: nextUser });
     });
@@ -72,6 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    stopHeartbeat();
     await supabase.auth.signOut();
     localStorage.removeItem(CACHED_USER_KEY);
     set({ user: null });
