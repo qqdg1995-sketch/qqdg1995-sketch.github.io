@@ -116,7 +116,7 @@ export default function ParentPage() {
 
   return (
     <div>
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} className="equal-stat-cards">
         <Col xs={8}><Card><Statistic title="💰 总计储蓄" value={stats.totalSave} precision={2} prefix="¥"
           valueStyle={{ color: '#10b981', fontSize: 22, fontWeight: 600 }} /></Card></Col>
         <Col xs={8}><Card><Statistic title="💸 总计消费" value={stats.totalSpend} precision={2} prefix="¥"

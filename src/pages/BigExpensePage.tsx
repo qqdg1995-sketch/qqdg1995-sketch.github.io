@@ -231,7 +231,7 @@ export default function BigExpensePage() {
   return (
     <div>
       {/* ======== 大额消费 ======== */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} className="equal-stat-cards">
         <Col xs={8}><Card>
           <Statistic title="💸 大额消费总额" value={expenseStats.totalExpense} precision={2} prefix="¥"
             valueStyle={{ color: '#ef4444', fontSize: 22, fontWeight: 600 }} />

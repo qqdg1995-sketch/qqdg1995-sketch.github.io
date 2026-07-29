@@ -401,11 +401,60 @@ body {
 
 /* ── SummaryPage mobile: 2-3 cols for comparison cards ── */
 @media (max-width: 576px) {
+  .summary-compare-cards .ant-col {
+    display: flex;
+  }
+
+  .summary-compare-cards .ant-card {
+    width: 100%;
+    height: 100%;
+  }
+
   .summary-compare-cards .ant-card-body {
+    width: 100%;
+    min-height: 82px;
     padding: 10px !important;
   }
   .summary-compare-cards .ant-card {
     margin-bottom: 8px;
+  }
+}
+
+/* Keep compact three-column statistic rows aligned even when values differ in length. */
+.equal-stat-cards .ant-col {
+  display: flex;
+}
+
+.equal-stat-cards .ant-card {
+  width: 100%;
+  height: 100%;
+}
+
+.equal-stat-cards .ant-card-body,
+.equal-stat-cards .ant-statistic {
+  width: 100%;
+}
+
+@media (max-width: 576px) {
+  .equal-stat-cards .ant-card-body {
+    min-height: 110px;
+  }
+
+  .equal-stat-cards .ant-statistic-title {
+    min-height: 36px;
+    line-height: 18px;
+  }
+
+  .equal-stat-cards .ant-statistic-content {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    font-size: clamp(15px, 4vw, 20px) !important;
+  }
+
+  .equal-stat-cards .ant-statistic-content-value {
+    white-space: nowrap;
   }
 }
 

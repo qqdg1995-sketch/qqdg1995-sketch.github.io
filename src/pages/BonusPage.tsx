@@ -101,7 +101,7 @@ export default function BonusPage() {
 
   return (
     <div>
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} className="equal-stat-cards">
         <Col xs={8}><Card>
           <Statistic title="🎁 奖金总收入" value={stats.totalBonus} precision={2} prefix="¥"
             valueStyle={{ color: '#f59e0b', fontSize: 22, fontWeight: 600 }} />
