@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { calculateAverageCost } from './finance';
+import { calculateAverageCost, roundCurrency } from './finance';
+
+describe('roundCurrency', () => {
+  it('rounds binary floating-point differences to cents', () => {
+    expect(roundCurrency(80000 - 69728.13)).toBe(10271.87);
+  });
+});
 
 describe('calculateAverageCost', () => {
   it('calculates average-cost holding and realized profit chronologically', () => {

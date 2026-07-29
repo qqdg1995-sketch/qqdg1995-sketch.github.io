@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import type { JPYRecord } from '../types';
 import dayjs from 'dayjs';
 import ResponsiveTable from '../components/ResponsiveTable';
-import { calculateAverageCost } from '../utils/finance';
+import { calculateAverageCost, roundCurrency } from '../utils/finance';
 
 export default function JPYPage() {
   const { user } = useAuthStore();
@@ -34,10 +34,10 @@ export default function JPYPage() {
     })));
     const holdingProfit = position.holding * rate / 100 - position.costBasis;
     return {
-      totalProfit: position.realizedProfit,
-      holdingProfit,
-      totalRealizedProfit: position.realizedProfit,
-      totalBuyCost: position.totalBuyCost,
+      totalProfit: roundCurrency(position.realizedProfit),
+      holdingProfit: roundCurrency(holdingProfit),
+      totalRealizedProfit: roundCurrency(position.realizedProfit),
+      totalBuyCost: roundCurrency(position.totalBuyCost),
       currentHolding: position.holding,
     };
   }, [records, rate]);

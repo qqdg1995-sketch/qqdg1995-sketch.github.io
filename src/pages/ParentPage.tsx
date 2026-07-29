@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import type { ParentRecord } from '../types';
 import dayjs from 'dayjs';
 import ResponsiveTable from '../components/ResponsiveTable';
+import { roundCurrency } from '../utils/finance';
 
 export default function ParentPage() {
   const { user } = useAuthStore();
@@ -27,7 +28,7 @@ export default function ParentPage() {
   const stats = useMemo(() => {
     const totalSave = records.filter((r) => r.type === 'save').reduce((s, r) => s + r.amount, 0);
     const totalSpend = records.filter((r) => r.type === 'spend').reduce((s, r) => s + r.amount, 0);
-    return { totalSave, totalSpend, remaining: totalSave - totalSpend };
+    return { totalSave, totalSpend, remaining: roundCurrency(totalSave - totalSpend) };
   }, [records]);
 
   const handleAdd = () => {

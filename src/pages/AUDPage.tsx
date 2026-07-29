@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import type { AUDRecord, AUDInterestRecord } from '../types';
 import dayjs from 'dayjs';
 import ResponsiveTable from '../components/ResponsiveTable';
-import { calculateAverageCost } from '../utils/finance';
+import { calculateAverageCost, roundCurrency } from '../utils/finance';
 
 export default function AUDPage() {
   const { user } = useAuthStore();
@@ -37,11 +37,11 @@ export default function AUDPage() {
     const totalInterest = interestRecords.reduce((sum, record) => sum + record.amount, 0);
     const holdingProfit = position.holding * rate / 100 - position.costBasis;
     return {
-      totalProfit: position.realizedProfit + totalInterest,
-      holdingProfit,
-      totalRealizedProfit: position.realizedProfit,
-      totalBuyCost: position.totalBuyCost,
-      totalInterest,
+      totalProfit: roundCurrency(position.realizedProfit + totalInterest),
+      holdingProfit: roundCurrency(holdingProfit),
+      totalRealizedProfit: roundCurrency(position.realizedProfit),
+      totalBuyCost: roundCurrency(position.totalBuyCost),
+      totalInterest: roundCurrency(totalInterest),
       currentHolding: position.holding,
     };
   }, [records, interestRecords, rate]);

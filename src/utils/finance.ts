@@ -12,6 +12,10 @@ export interface AverageCostResult {
   totalBuyCost: number;
 }
 
+export function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function calculateAverageCost(records: AverageCostRecord[]): AverageCostResult {
   let holding = 0;
   let costBasis = 0;
@@ -51,4 +55,3 @@ export function getHoldingBefore(
   ));
   return calculateAverageCost(preceding).holding;
 }
-
